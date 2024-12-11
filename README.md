@@ -1,1 +1,1 @@
-# gopkgview
+# gopkgviewer
