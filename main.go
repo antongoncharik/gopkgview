@@ -1,147 +1,74 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"go/build"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
+	"os/signal"
+	"time"
 
-	"golang.org/x/mod/modfile"
+	"github.com/antongoncharik/gopkgviewer/internal/graph"
+	"github.com/carlmjohnson/versioninfo"
+	"github.com/urfave/cli/v2"
 )
 
-type Node struct {
-	Name string
-	Type string
-}
-
-type Edge struct {
-	From string
-	To   string
-}
-
-type Graph struct {
-	Nodes []Node
-	Edges []Edge
-}
-
-func Reverse[T any](ss []T) []T {
-	if len(ss) < 2 {
-		return ss
-	}
-
-	sorted := make([]T, len(ss))
-	for i := 0; i < len(ss); i++ {
-		sorted[i] = ss[len(ss)-i-1]
-	}
-
-	return sorted
-}
-
 func main() {
-	data, err := os.ReadFile("go.mod")
-	if err != nil {
-		fmt.Println("error reading go.mod:", err)
-		return
-	}
+	//go:embed frontend/dist/*
+	// var frontend embed.FS
 
-	modFile, err := modfile.Parse("go.mod", data, nil)
-	if err != nil {
-		fmt.Println("Error parsing go.mod:", err)
-		return
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer stop()
 
-	packages := make(map[string][]Node)
-	packagesStack := make([]string, 0)
-	visited := make(map[string]bool)
-	analyzePackage(modFile.Module.Mod.Path, visited, packages, &packagesStack)
+	go func() {
+		<-ctx.Done()
+		time.Sleep(3 * time.Second)
 
-	nodes := make([]Node, 0)
-	edges := make([]Edge, 0)
-	for _, v := range Reverse(packagesStack) {
-		for _, vv := range packages[v] {
-			isExistNode := false
-			for _, n := range nodes {
-				if n == vv {
-					isExistNode = true
-				}
+		log.Print("force exit")
+		os.Exit(1)
+	}()
+
+	app := &cli.App{
+		Name:    "gopkgviewer",
+		Usage:   "Show dependencies of a Go package",
+		Version: versioninfo.Short(),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "gomod",
+				EnvVars: []string{"GO_PKGVIEWER_GOMOD"},
+				Usage:   "Path to go.mod file to detect external dependencies",
+			},
+			&cli.StringFlag{
+				Name:        "addr",
+				EnvVars:     []string{"GO_PKGVIEWER_ADDR"},
+				Usage:       "Address to listen on",
+				DefaultText: ":0",
+			},
+			&cli.BoolFlag{
+				Name:    "skip-browser",
+				EnvVars: []string{"GO_PKGVIEW_SKIP_BROWSER"},
+				Usage:   "Don't open browser on start",
+			},
+		},
+		Action: func(cCtx *cli.Context) error {
+			addr := cCtx.String("addr")
+			gomod := cCtx.String("gomod")
+			skipBrowser := cCtx.Bool("skip-browser")
+
+			log.Println("creating graph...")
+			pkgGraph, err := graph.New()
+			if err != nil {
+				return fmt.Errorf("failed to build graph: %w", err)
 			}
-			if !isExistNode {
-				nodes = append(nodes, vv)
-			}
+			log.Println("graph created")
+			log.Println(pkgGraph)
 
-			edges = append(edges, Edge{From: v, To: vv.Name})
-		}
-		nodes = append(nodes, Node{Name: v, Type: "loc"})
+			return nil
+		},
 	}
 
-	gg := Graph{Nodes: nodes, Edges: edges}
-	// fmt.Println(packagesStack)
-	// fmt.Println(packages)
-
-	b, _ := json.Marshal(gg)
-	fmt.Println(string(b))
-}
-
-func analyzePackage(importPath string, visited map[string]bool, packages map[string][]Node, packagesStack *[]string) {
-	if visited[importPath] {
-		return
+	if err := app.Run(os.Args); err != nil {
+		fmt.Println("error:")
+		fmt.Printf(" > %+v\n", err)
 	}
-	visited[importPath] = true
-
-	pkg, err := build.Import(importPath, "", 0)
-	if err != nil {
-		log.Printf("error importing package %s: %v", importPath, err)
-		return
-	}
-
-	for _, imp := range pkg.Imports {
-		pkg, err := build.Import(imp, "", 0)
-		if err != nil {
-			log.Printf("error importing package %s: %v", importPath, err)
-			return
-		}
-
-		packageType := "ext"
-		if pkg.Goroot {
-			packageType = "std"
-		}
-		if isLocaclPkg(pkg.Dir) {
-			packageType = "loc"
-		}
-
-		packages[importPath] = append(packages[importPath], Node{Name: imp, Type: packageType})
-
-		isExistPkg := false
-		for _, v := range *packagesStack {
-			if v == importPath {
-				isExistPkg = true
-			}
-		}
-		if !isExistPkg {
-			*packagesStack = append(*packagesStack, importPath)
-		}
-
-		if packageType != "loc" {
-			continue
-		}
-
-		analyzePackage(imp, visited, packages, packagesStack)
-	}
-}
-
-func isLocaclPkg(pkgDir string) bool {
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("failed to get current directory: %v", err)
-	}
-
-	absPkgDir, err := filepath.Abs(pkgDir)
-	if err != nil {
-		log.Fatalf("failed to get absolute path of package: %v", err)
-	}
-
-	return strings.HasPrefix(absPkgDir, projectRoot)
 }
