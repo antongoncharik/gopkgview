@@ -23,6 +23,16 @@ func main() {
 	// go:embed frontend/dist/*
 	var frontend embed.FS
 
+	data, err := frontend.ReadFile("frontend/dist/index.html")
+	if err != nil {
+		log.Fatalf("Failed to read embedded file: %v", err)
+	}
+
+	fmt.Println("Embedded file content:")
+	fmt.Println(string(data))
+
+	return
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer stop()
 
@@ -90,6 +100,18 @@ func main() {
 			fsys, err := fs.Sub(frontend, "frontend/dist")
 			if err != nil {
 				return fmt.Errorf("failed to get frontend subdirectory: %v", err)
+			}
+
+			entries, err := frontend.ReadDir(".")
+			if err != nil {
+				log.Fatalf("failed to read embedded directory: %v", err)
+			}
+
+			log.Println("Hello")
+			log.Println(entries)
+			log.Println("End")
+			for _, entry := range entries {
+				log.Printf("embedded file: %s", entry.Name())
 			}
 
 			mux := http.NewServeMux()
