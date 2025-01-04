@@ -13,26 +13,16 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/antongoncharik/gopkgviewer/internal/graph"
+	"github.com/antonhancharyk/gopkgviewer/internal/graph"
 	"github.com/carlmjohnson/versioninfo"
 	"github.com/pkg/browser"
 	"github.com/urfave/cli/v2"
 )
 
+//go:embed frontend/dist/*
+var frontend embed.FS
+
 func main() {
-	// go:embed frontend/dist/*
-	var frontend embed.FS
-
-	data, err := frontend.ReadFile("frontend/dist/index.html")
-	if err != nil {
-		log.Fatalf("Failed to read embedded file: %v", err)
-	}
-
-	fmt.Println("Embedded file content:")
-	fmt.Println(string(data))
-
-	return
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer stop()
 
@@ -71,7 +61,7 @@ func main() {
 			// gomod := cCtx.String("gomod")
 			skipBrowser := cCtx.Bool("skip-browser")
 
-			log.Println("creating graph...")
+			log.Print("creating graph...")
 			pkgGraph := graph.New()
 			// if err != nil {
 			// 	return fmt.Errorf("failed to build graph: %v", err)
@@ -102,18 +92,6 @@ func main() {
 				return fmt.Errorf("failed to get frontend subdirectory: %v", err)
 			}
 
-			entries, err := frontend.ReadDir(".")
-			if err != nil {
-				log.Fatalf("failed to read embedded directory: %v", err)
-			}
-
-			log.Println("Hello")
-			log.Println(entries)
-			log.Println("End")
-			for _, entry := range entries {
-				log.Printf("embedded file: %s", entry.Name())
-			}
-
 			mux := http.NewServeMux()
 			mux.Handle("/data", handler(graphJSON))
 			mux.Handle("/", http.FileServer(http.FS(fsys)))
@@ -130,7 +108,7 @@ func main() {
 
 				if !skipBrowser {
 					webAddr := "http://" + listener.Addr().String()
-					log.Println("opening browser on ", webAddr)
+					log.Print("opening browser on ", webAddr)
 					if err := browser.OpenURL(webAddr); err != nil {
 						log.Printf("failed to open browser: %v", err)
 					}

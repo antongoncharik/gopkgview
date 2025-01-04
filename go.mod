@@ -1,4 +1,4 @@
-module github.com/antongoncharik/gopkgviewer
+module github.com/antonhancharyk/gopkgviewer
 
 go 1.23.3
 
