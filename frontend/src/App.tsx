@@ -7,50 +7,89 @@ import {
   addEdge,
   MiniMap,
   Controls,
+  MarkerType,
 } from '@xyflow/react';
-
 import '@xyflow/react/dist/style.css';
 
-const initialNodes = [
-  {
-    id: 'hidden-1',
-    type: 'input',
-    data: { label: 'Node 1' },
-    position: { x: 250, y: 5 },
-  },
-  { id: 'hidden-2', data: { label: 'Node 2' }, position: { x: 100, y: 100 } },
-  { id: 'hidden-3', data: { label: 'Node 3' }, position: { x: 400, y: 100 } },
-  { id: 'hidden-4', data: { label: 'Node 4' }, position: { x: 400, y: 200 } },
-];
+interface Edge {
+  From: string;
+  To: string;
+}
 
-const initialEdges = [
-  { id: 'hidden-e1-2', source: 'hidden-1', target: 'hidden-2' },
-  { id: 'hidden-e1-3', source: 'hidden-1', target: 'hidden-3' },
-  { id: 'hidden-e3-4', source: 'hidden-3', target: 'hidden-4' },
-];
+interface Node {
+  Name: string;
+  Type: string;
+}
 
-const hide = (hidden: boolean) => (nodeOrEdge: any) => {
-  return {
-    ...nodeOrEdge,
-    hidden,
-  };
-};
+interface Graph {
+  edges: Edge[];
+  nodes: Node[];
+}
+
+// const hide = (hidden: boolean) => (nodeOrEdge: any) => {
+//   return {
+//     ...nodeOrEdge,
+//     hidden,
+//   };
+// };
 
 const Flow = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [loading, setLoading] = useState(true);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [hidden, setHidden] = useState(false);
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const onConnect = useCallback(
+    // @ts-ignore
     (params: any) => setEdges((els) => addEdge(params, els)),
     []
   );
 
-  useEffect(() => {
-    setNodes((nds) => nds.map(hide(hidden)));
-    setEdges((eds) => eds.map(hide(hidden)));
-  }, [hidden]);
+  async function fetchData() {
+    try {
+      const response = await fetch('http://localhost:39261/data');
+      const data: Graph = await response.json();
 
+      const initialNodes = data.nodes.map((node, idx) => {
+        return {
+          id: node.Name,
+          data: { label: node.Name },
+          position: { x: 100, y: 100 * idx },
+          // targetPosition: 'left',
+          // sourcePosition: 'right',
+          // connectable: false,
+          // deletable: false,
+        };
+      });
+
+      const initialEdges = data.edges.map((edge) => {
+        return {
+          id: edge.From + '-' + edge.To,
+          source: edge.From,
+          target: edge.To,
+          deletable: false,
+          reconnectable: false,
+          markerEnd: { type: MarkerType.Arrow, width: 24, height: 24 },
+        };
+      });
+      // @ts-ignore
+      setNodes(initialNodes);
+      // @ts-ignore
+      setEdges(initialEdges);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
   return (
     <ReactFlow
       nodes={nodes}
