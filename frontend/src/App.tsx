@@ -140,7 +140,7 @@ const Flow = () => {
     | undefined
   > => {
     try {
-      const response = await fetch('http://localhost:41719/data');
+      const response = await fetch('/data');
       const data: Graph = await response.json();
 
       const initialNodes = data.nodes.map((node) => {
